@@ -185,3 +185,48 @@ npm run test:e2e
 # Build all workspaces
 npm run build
 ```
+
+## Docker
+
+Requires Docker Desktop (or Docker Engine + Compose plugin).
+
+### Start
+
+```bash
+# Build images and start backend (port 3000) + frontend (port 5173) in the background
+npm run docker:up
+# or
+docker compose up --build -d
+```
+
+Open **http://localhost:5173** in a browser.
+
+The backend API is also directly accessible at **http://localhost:3000**.
+
+> **How it works:** The frontend is served by nginx which proxies `/api/*` requests to the backend container internally — no CORS configuration required.
+
+### Logs
+
+```bash
+npm run docker:logs
+# or
+docker compose logs -f
+```
+
+### Stop
+
+```bash
+# Stop containers; SQLite data volume is preserved
+npm run docker:down
+# or
+docker compose down
+
+# Stop containers AND delete the SQLite data volume
+docker compose down -v
+```
+
+### SQLite persistence
+
+The database file lives in a named Docker volume (`db-data`).  
+It survives `docker compose down` / `up` cycles.  
+Only `docker compose down -v` destroys it.

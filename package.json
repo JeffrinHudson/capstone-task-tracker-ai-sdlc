@@ -16,7 +16,10 @@
     "lint": "npm run lint --workspaces --if-present",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test:e2e": "npm run test --workspace=e2e"
+    "test:e2e": "npm run test --workspace=e2e",
+    "docker:up": "docker compose up --build -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f"
   },
   "devDependencies": {
     "prettier": "^3.3.3"
