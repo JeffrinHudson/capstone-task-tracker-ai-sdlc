@@ -174,10 +174,46 @@ npm run format:check
 
 ## Tests
 
+### End-to-end (Playwright)
+
+Gherkin specifications live in `e2e/features/`. Playwright implementations live in `e2e/tests/`.
+
 ```bash
-# Run e2e tests (requires frontend + backend running)
+# Build images, start services via Docker Compose, then run all e2e tests
 npm run test:e2e
 ```
+
+`docker compose up -d --wait` starts the backend (`:3000`) and frontend (`:5173`) and waits for the backend health-check before running tests.
+
+If both services are already running you can skip the compose step:
+
+```bash
+npm run test --workspace=e2e
+# or, from inside e2e/:
+npx playwright test
+```
+
+To run a single spec file:
+
+```bash
+npx playwright test tests/create-task.spec.ts --project=chromium
+```
+
+#### HTML report
+
+After a test run the HTML report is written to `e2e/test-results/html-report/`.
+
+```bash
+# Open the last report in a browser
+npx playwright show-report e2e/test-results/html-report
+```
+
+#### Environment variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `BASE_URL` | `http://localhost:5173` | Frontend URL hit by Playwright |
+| `API_URL` | `http://localhost:3000` | Backend URL used by test helpers for setup/teardown |
 
 ## Build
 
