@@ -217,9 +217,52 @@ npx playwright show-report e2e/test-results/html-report
 
 ## Build
 
+### Shell script (Linux / macOS / WSL / Git Bash)
+
+`build.sh` performs a fully clean build suitable for CI: it installs exact
+dependency versions from the lock file then builds both workspaces in order.
+
 ```bash
-# Build all workspaces
+chmod +x build.sh   # first time only
+./build.sh
+```
+
+Steps performed:
+
+1. Verify Node 20+ is available
+2. `npm ci` — install exact versions from `package-lock.json`
+3. `npm run build --workspace=backend` — `prisma generate` then `tsc` → `backend/dist/`
+4. `npm run build --workspace=frontend` — `tsc` type-check then Vite bundle → `frontend/dist/`
+5. Print artifact sizes
+
+### npm scripts (cross-platform)
+
+```bash
+# Install + build all workspaces in one command (CI-safe)
+npm run build:ci
+
+# Build all workspaces (assumes node_modules already installed)
 npm run build
+
+# Build a single workspace
+npm run build --workspace=backend
+npm run build --workspace=frontend
+```
+
+### Output artifacts
+
+| Path | Contents |
+|---|---|
+| `backend/dist/` | Compiled Node.js server (`index.js` + supporting modules) |
+| `frontend/dist/` | Static files ready to be served (HTML, JS chunks, assets) |
+
+### Starting the built backend
+
+```bash
+# Requires DATABASE_URL in the environment
+cd backend
+DATABASE_URL="file:./dev.db" npx prisma migrate deploy
+node dist/index.js
 ```
 
 ## Docker

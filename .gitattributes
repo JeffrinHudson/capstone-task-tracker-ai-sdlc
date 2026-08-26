@@ -1,0 +1,2 @@
+# Ensure shell scripts always use LF so they remain executable on Linux/macOS CI
+*.sh text eol=lf
