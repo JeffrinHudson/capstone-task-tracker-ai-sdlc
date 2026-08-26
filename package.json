@@ -1,0 +1,24 @@
+{
+  "name": "capstone-task-tracker-ai-sdlc",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend",
+    "e2e"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev:backend": "npm run dev --workspace=backend",
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test:e2e": "npm run test --workspace=e2e"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3"
+  }
+}

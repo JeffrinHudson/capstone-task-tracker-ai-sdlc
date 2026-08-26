@@ -1,0 +1,19 @@
+{
+  "name": "e2e",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "lint": "eslint . --ext .ts",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.57.1",
+    "prettier": "^3.3.3",
+    "typescript": "^5.7.2"
+  }
+}
