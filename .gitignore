@@ -149,3 +149,6 @@ vite.config.ts.timestamp-*
 # Playwright
 playwright-report/
 test-results/
+
+# Throwaway scripts (contain credentials or generated artifacts)
+create-jira-issues.py
