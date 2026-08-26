@@ -1,9 +1,10 @@
 import 'dotenv/config';
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from './lib/prisma';
+import tasksRouter from './routes/tasks';
+import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
-const prisma = new PrismaClient();
 const PORT = process.env.PORT ?? 3001;
 
 app.use(express.json());
@@ -16,6 +17,9 @@ app.get('/health', async (_req, res) => {
     res.status(503).json({ status: 'error' });
   }
 });
+
+app.use('/api/tasks', tasksRouter);
+app.use(errorHandler);
 
 const server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

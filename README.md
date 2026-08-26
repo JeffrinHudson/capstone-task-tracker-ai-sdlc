@@ -39,6 +39,116 @@ npm run dev:backend
 npm run dev:frontend
 ```
 
+## API Reference
+
+Base URL: `http://localhost:3001` — all request/response bodies are JSON.
+
+### Task schema
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | `string` (UUID) | Auto-generated |
+| `title` | `string` | Required |
+| `description` | `string \| null` | Optional |
+| `status` | `OPEN \| DONE` | Default `OPEN` |
+| `priority` | `LOW \| MEDIUM \| HIGH` | Default `MEDIUM` |
+| `dueDate` | `string \| null` (ISO 8601) | Optional |
+| `createdAt` | `string` (ISO 8601) | Auto-generated |
+| `updatedAt` | `string` (ISO 8601) | Auto-updated |
+
+---
+
+### `GET /api/tasks`
+
+List tasks with optional filtering and sorting.
+
+**Query parameters**
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `q` | `string` | — | Case-insensitive search across `title` and `description` |
+| `status` | `OPEN \| DONE` | — | Filter by status |
+| `sortBy` | `dueDate` | — | Sort field |
+| `sortDir` | `asc \| desc` | `asc` | Sort direction; tasks without a `dueDate` always sort last |
+
+**Response** `200 OK` — `Task[]`
+
+```
+GET /api/tasks?status=OPEN&sortBy=dueDate&sortDir=asc
+GET /api/tasks?q=pipeline
+```
+
+---
+
+### `POST /api/tasks`
+
+Create a task.
+
+**Request body**
+
+| Field | Required | Notes |
+|---|---|---|
+| `title` | yes | Non-empty string |
+| `description` | no | String or omit |
+| `priority` | no | `LOW \| MEDIUM \| HIGH`; default `MEDIUM` |
+| `dueDate` | no | ISO 8601 string or omit |
+
+**Response** `201 Created` — `Task`
+
+```json
+{ "title": "Ship it", "priority": "HIGH", "dueDate": "2026-09-30T00:00:00.000Z" }
+```
+
+---
+
+### `PUT /api/tasks/:id`
+
+Full replace of a task. Omitted nullable fields (`description`, `dueDate`) are cleared to `null`.
+
+**Request body** — same fields as `POST`, plus:
+
+| Field | Required | Notes |
+|---|---|---|
+| `status` | no | `OPEN \| DONE`; default `OPEN` |
+
+**Response** `200 OK` — updated `Task`  
+**Response** `404 Not Found` — task does not exist
+
+---
+
+### `PATCH /api/tasks/:id/status`
+
+Toggle task status only.
+
+**Request body**
+
+```json
+{ "status": "DONE" }
+```
+
+**Response** `200 OK` — updated `Task`  
+**Response** `400 Bad Request` — invalid status value  
+**Response** `404 Not Found` — task does not exist
+
+---
+
+### `DELETE /api/tasks/:id`
+
+Delete a task.
+
+**Response** `204 No Content`  
+**Response** `404 Not Found` — task does not exist
+
+---
+
+### Error format
+
+All `4xx` and `5xx` responses return:
+
+```json
+{ "error": "<human-readable message>" }
+```
+
 ## Database
 
 ```bash
