@@ -1,20 +1,16 @@
-export type Status = 'OPEN' | 'DONE';
-export type Priority = 'LOW' | 'MEDIUM' | 'HIGH';
+export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'DONE';
 
 export interface Task {
   id: string;
   title: string;
-  description: string | null;
-  status: Status;
-  priority: Priority;
-  dueDate: string | null;
+  status: TaskStatus;
+  dueDate: string | null; // YYYY-MM-DD
   createdAt: string;
   updatedAt: string;
 }
 
 export interface TaskFormData {
   title: string;
-  description: string;
-  priority: Priority;
-  dueDate: string;
+  status: TaskStatus;
+  dueDate: string; // '' allowed in UI; normalized to null on API
 }

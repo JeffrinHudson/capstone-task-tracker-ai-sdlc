@@ -1,47 +1,32 @@
-/**
- * Feature: Create Task
- * Spec: e2e/features/create-task.feature
- */
 import { test, expect } from '@playwright/test';
 import { clearAllTasks } from './helpers';
 
 test.describe('Feature: Create Task', () => {
-  test.beforeEach(async () => {
+  test.beforeEach(async ({ page }) => {
     await clearAllTasks();
+    await page.goto('/');
   });
 
-  // Scenario: Create a task with title only
   test('creates a task with title only', async ({ page }) => {
-    await page.goto('/');
+    await page.getByTestId('tasks-new-btn').click();
 
-    await page.getByTestId('btn-new-task').click();
-    await expect(page.getByTestId('task-modal')).toBeVisible();
+    await page.getByTestId('task-title-input').fill('Write report');
+    await page.getByTestId('task-save-btn').click();
 
-    await page.getByTestId('input-title').fill('Buy groceries');
-    await page.getByTestId('btn-save').click();
-
-    await expect(page.getByTestId('task-modal')).not.toBeVisible();
-    await expect(
-      page.getByTestId('task-title').filter({ hasText: 'Buy groceries' }),
-    ).toBeVisible();
+    await expect(page.getByText('Write report')).toBeVisible();
   });
 
-  // Scenario: Create a task with all fields filled
   test('creates a task with all fields', async ({ page }) => {
-    await page.goto('/');
+    await page.getByTestId('tasks-new-btn').click();
 
-    await page.getByTestId('btn-new-task').click();
-    await page.getByTestId('input-title').fill('Deploy to production');
-    await page.getByTestId('input-description').fill('Final deployment steps');
-    await page.getByTestId('select-priority').selectOption('HIGH');
-    await page.getByTestId('input-due-date').fill('2026-12-31');
-    await page.getByTestId('btn-save').click();
+    await page.getByTestId('task-title-input').fill('Book flights');
+    await page.getByTestId('task-status-select').selectOption('IN_PROGRESS');
+    await page.getByTestId('task-dueDate-input').fill('2099-12-31');
 
-    await expect(page.getByTestId('task-modal')).not.toBeVisible();
+    await page.getByTestId('task-save-btn').click();
 
-    const row = page.getByTestId('task-row').filter({
-      has: page.getByTestId('task-title').filter({ hasText: 'Deploy to production' }),
-    });
-    await expect(row.getByTestId('task-priority')).toHaveText('HIGH');
+    await expect(page.getByText('Book flights')).toBeVisible();
+    await expect(page.getByText('IN_PROGRESS')).toBeVisible();
+    await expect(page.getByText('2099-12-31')).toBeVisible();
   });
 });

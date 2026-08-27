@@ -45,16 +45,16 @@ Base URL: `http://localhost:3001` — all request/response bodies are JSON.
 
 ### Task schema
 
-| Field | Type | Notes |
-|---|---|---|
-| `id` | `string` (UUID) | Auto-generated |
-| `title` | `string` | Required |
-| `description` | `string \| null` | Optional |
-| `status` | `OPEN \| DONE` | Default `OPEN` |
-| `priority` | `LOW \| MEDIUM \| HIGH` | Default `MEDIUM` |
-| `dueDate` | `string \| null` (ISO 8601) | Optional |
-| `createdAt` | `string` (ISO 8601) | Auto-generated |
-| `updatedAt` | `string` (ISO 8601) | Auto-updated |
+| Field         | Type                        | Notes            |
+| ------------- | --------------------------- | ---------------- |
+| `id`          | `string` (UUID)             | Auto-generated   |
+| `title`       | `string`                    | Required         |
+| `description` | `string \| null`            | Optional         |
+| `status`      | `OPEN \| DONE`              | Default `OPEN`   |
+| `priority`    | `LOW \| MEDIUM \| HIGH`     | Default `MEDIUM` |
+| `dueDate`     | `string \| null` (ISO 8601) | Optional         |
+| `createdAt`   | `string` (ISO 8601)         | Auto-generated   |
+| `updatedAt`   | `string` (ISO 8601)         | Auto-updated     |
 
 ---
 
@@ -64,12 +64,12 @@ List tasks with optional filtering and sorting.
 
 **Query parameters**
 
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `q` | `string` | — | Case-insensitive search across `title` and `description` |
-| `status` | `OPEN \| DONE` | — | Filter by status |
-| `sortBy` | `dueDate` | — | Sort field |
-| `sortDir` | `asc \| desc` | `asc` | Sort direction; tasks without a `dueDate` always sort last |
+| Parameter | Type           | Default | Description                                                |
+| --------- | -------------- | ------- | ---------------------------------------------------------- |
+| `q`       | `string`       | —       | Case-insensitive search across `title` and `description`   |
+| `status`  | `OPEN \| DONE` | —       | Filter by status                                           |
+| `sortBy`  | `dueDate`      | —       | Sort field                                                 |
+| `sortDir` | `asc \| desc`  | `asc`   | Sort direction; tasks without a `dueDate` always sort last |
 
 **Response** `200 OK` — `Task[]`
 
@@ -86,12 +86,12 @@ Create a task.
 
 **Request body**
 
-| Field | Required | Notes |
-|---|---|---|
-| `title` | yes | Non-empty string |
-| `description` | no | String or omit |
-| `priority` | no | `LOW \| MEDIUM \| HIGH`; default `MEDIUM` |
-| `dueDate` | no | ISO 8601 string or omit |
+| Field         | Required | Notes                                     |
+| ------------- | -------- | ----------------------------------------- |
+| `title`       | yes      | Non-empty string                          |
+| `description` | no       | String or omit                            |
+| `priority`    | no       | `LOW \| MEDIUM \| HIGH`; default `MEDIUM` |
+| `dueDate`     | no       | ISO 8601 string or omit                   |
 
 **Response** `201 Created` — `Task`
 
@@ -107,9 +107,9 @@ Full replace of a task. Omitted nullable fields (`description`, `dueDate`) are c
 
 **Request body** — same fields as `POST`, plus:
 
-| Field | Required | Notes |
-|---|---|---|
-| `status` | no | `OPEN \| DONE`; default `OPEN` |
+| Field    | Required | Notes                          |
+| -------- | -------- | ------------------------------ |
+| `status` | no       | `OPEN \| DONE`; default `OPEN` |
 
 **Response** `200 OK` — updated `Task`  
 **Response** `404 Not Found` — task does not exist
@@ -210,10 +210,10 @@ npx playwright show-report e2e/test-results/html-report
 
 #### Environment variables
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `BASE_URL` | `http://localhost:5173` | Frontend URL hit by Playwright |
-| `API_URL` | `http://localhost:3000` | Backend URL used by test helpers for setup/teardown |
+| Variable   | Default                 | Purpose                                             |
+| ---------- | ----------------------- | --------------------------------------------------- |
+| `BASE_URL` | `http://localhost:5173` | Frontend URL hit by Playwright                      |
+| `API_URL`  | `http://localhost:3000` | Backend URL used by test helpers for setup/teardown |
 
 ## Build
 
@@ -251,9 +251,9 @@ npm run build --workspace=frontend
 
 ### Output artifacts
 
-| Path | Contents |
-|---|---|
-| `backend/dist/` | Compiled Node.js server (`index.js` + supporting modules) |
+| Path             | Contents                                                  |
+| ---------------- | --------------------------------------------------------- |
+| `backend/dist/`  | Compiled Node.js server (`index.js` + supporting modules) |
 | `frontend/dist/` | Static files ready to be served (HTML, JS chunks, assets) |
 
 ### Starting the built backend

@@ -1,233 +1,255 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import type { Task, Status, TaskFormData } from './types';
-import { fetchTasks, createTask, updateTask, patchTaskStatus, deleteTask } from './api';
-import TaskModal from './components/TaskModal';
-import TaskRow from './components/TaskRow';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { Task, TaskFormData, TaskStatus } from './types';
+import { createTask, fetchTasks, updateTask } from './api';
 
-type StatusFilter = 'ALL' | Status;
-type SortDir = 'asc' | 'desc';
+const STATUSES: TaskStatus[] = ['TODO', 'IN_PROGRESS', 'DONE'];
+
+type ApiErrorResponse = {
+  error?: {
+    code?: string;
+    message?: string;
+    fields?: Record<string, string>;
+  };
+};
+
+function formatDueDate(value: string | null): string {
+  return value ?? '—';
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
 
 export default function App() {
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [items, setItems] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
 
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
-  const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState<Task | null>(null);
 
-  const [showCreate, setShowCreate] = useState(false);
-  const [editTask, setEditTask] = useState<Task | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
-  const [deleteError, setDeleteError] = useState('');
+  const [form, setForm] = useState<TaskFormData>({
+    title: '',
+    status: 'TODO',
+    dueDate: '',
+  });
+  const [saving, setSaving] = useState(false);
 
-  // Debounce search input to avoid hammering the API on every keystroke
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [formError, setFormError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => setDebouncedSearch(search), 300);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [search]);
-
-  const loadTasks = useCallback(async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setLoadError('');
     try {
-      const data = await fetchTasks({
-        q: debouncedSearch || undefined,
-        status: statusFilter !== 'ALL' ? statusFilter : undefined,
-        sortBy: 'dueDate',
-        sortDir,
-      });
-      setTasks(data);
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Failed to load tasks');
+      const data = await fetchTasks();
+      setItems(data);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, statusFilter, sortDir]);
+  }, []);
 
-  useEffect(() => { loadTasks(); }, [loadTasks]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
-  async function handleCreate(data: TaskFormData & { status: Status }) {
-    const task = await createTask(data);
-    setTasks((prev) => [task, ...prev]);
+  const formTitle = useMemo(() => (editing ? 'Edit Task' : 'New Task'), [editing]);
+
+  function openCreate() {
+    setEditing(null);
+    setForm({ title: '', status: 'TODO', dueDate: '' });
+    setFormError('');
+    setFieldErrors({});
+    setShowForm(true);
   }
 
-  async function handleUpdate(data: TaskFormData & { status: Status }) {
-    if (!editTask) return;
-    const updated = await updateTask(editTask.id, data);
-    setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+  function openEdit(t: Task) {
+    setEditing(t);
+    setForm({ title: t.title, status: t.status, dueDate: t.dueDate ?? '' });
+    setFormError('');
+    setFieldErrors({});
+    setShowForm(true);
   }
 
-  async function handleToggleStatus(task: Task) {
-    const next: Status = task.status === 'OPEN' ? 'DONE' : 'OPEN';
+  function closeForm() {
+    setShowForm(false);
+  }
+
+  async function submit() {
+    setSaving(true);
+    setFormError('');
+    setFieldErrors({});
+
     try {
-      const updated = await patchTaskStatus(task.id, next);
-      setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update status');
-    }
-  }
+      const saved = editing ? await updateTask(editing.id, form) : await createTask(form);
 
-  async function handleDelete() {
-    if (!deleteTarget) return;
-    setDeleteError('');
-    try {
-      await deleteTask(deleteTarget.id);
-      setTasks((prev) => prev.filter((t) => t.id !== deleteTarget.id));
-      setDeleteTarget(null);
-    } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : 'Failed to delete task');
+      if (editing) {
+        setItems((prev) => prev.map((x) => (x.id === saved.id ? saved : x)));
+      } else {
+        setItems((prev) => [saved, ...prev]);
+      }
+      setShowForm(false);
+    } catch (e: unknown) {
+      const err = e as Error & { payload?: unknown };
+      const payload = err.payload;
+      if (isObject(payload)) {
+        const fields = (payload as ApiErrorResponse)?.error?.fields;
+        if (fields && typeof fields === 'object') {
+          setFieldErrors(fields);
+        }
+      }
+      setFormError(err.message || 'Save failed');
+    } finally {
+      setSaving(false);
     }
   }
 
   return (
-    <div style={styles.page}>
+    <div data-testid="tasks-list-page" style={styles.page}>
       <header style={styles.header}>
-        <h1 style={styles.heading} data-testid="app-title">Task Tracker</h1>
-        <button
-          data-testid="btn-new-task"
-          onClick={() => setShowCreate(true)}
-          style={styles.btnPrimary}
-        >
-          + New Task
+        <h1 style={styles.h1}>Tasks</h1>
+        <button data-testid="tasks-new-btn" onClick={openCreate} style={styles.primaryBtn}>
+          New Task
         </button>
       </header>
 
-      {/* Controls */}
-      <div style={styles.controls}>
-        <input
-          type="search"
-          data-testid="input-search"
-          placeholder="Search tasks…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{ ...styles.input, width: 220 }}
-        />
-
-        <div style={styles.controlGroup}>
-          <label htmlFor="status-filter" style={styles.controlLabel}>Status</label>
-          <select
-            id="status-filter"
-            data-testid="select-status-filter"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            style={styles.input}
-          >
-            <option value="ALL">All</option>
-            <option value="OPEN">Open</option>
-            <option value="DONE">Done</option>
-          </select>
-        </div>
-
-        <div style={styles.controlGroup}>
-          <label htmlFor="sort-dir" style={styles.controlLabel}>Due Date</label>
-          <select
-            id="sort-dir"
-            data-testid="select-sort"
-            value={sortDir}
-            onChange={(e) => setSortDir(e.target.value as SortDir)}
-            style={styles.input}
-          >
-            <option value="asc">Asc</option>
-            <option value="desc">Desc</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Task table */}
       {loadError && (
-        <div data-testid="load-error" style={styles.alertError}>{loadError}</div>
+        <div data-testid="tasks-load-error" style={styles.errorBanner}>
+          {loadError}{' '}
+          <button onClick={load} style={styles.linkBtn}>
+            Retry
+          </button>
+        </div>
       )}
 
       {loading ? (
-        <p data-testid="loading-indicator" style={styles.muted}>Loading…</p>
-      ) : (
-        <div style={styles.tableWrapper}>
-          <table data-testid="task-table" style={styles.table}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
-                <th style={styles.th}></th>
-                <th style={styles.th}>Title</th>
-                <th style={styles.th}>Priority</th>
-                <th style={styles.th}>Status</th>
-                <th style={styles.th}>Due Date</th>
-                <th style={styles.th}>Last Updated</th>
-                <th style={styles.th}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {tasks.length === 0 ? (
-                <tr>
-                  <td colSpan={7} style={{ ...styles.th, textAlign: 'center', color: '#9ca3af' }}>
-                    <span data-testid="empty-state">No tasks found</span>
-                  </td>
-                </tr>
-              ) : (
-                tasks.map((task) => (
-                  <TaskRow
-                    key={task.id}
-                    task={task}
-                    onEdit={setEditTask}
-                    onToggleStatus={handleToggleStatus}
-                    onDelete={setDeleteTarget}
-                  />
-                ))
-              )}
-            </tbody>
-          </table>
+        <div style={{ padding: 12 }}>Loading…</div>
+      ) : items.length === 0 ? (
+        <div data-testid="tasks-empty" style={styles.empty}>
+          <div style={{ marginBottom: 12 }}>No tasks yet</div>
+          <button data-testid="tasks-new-btn" onClick={openCreate} style={styles.primaryBtn}>
+            New Task
+          </button>
         </div>
+      ) : (
+        <table data-testid="tasks-table" style={styles.table}>
+          <thead>
+            <tr>
+              <th style={styles.th}>Title</th>
+              <th style={styles.th}>Status</th>
+              <th style={styles.th}>Due Date</th>
+              <th style={styles.th}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((t) => (
+              <tr key={t.id} data-testid={`task-row-${t.id}`}>
+                <td data-testid={`task-title-${t.id}`} style={styles.td}>
+                  {t.title}
+                </td>
+                <td data-testid={`task-status-${t.id}`} style={styles.td}>
+                  <span style={styles.badge}>{t.status}</span>
+                </td>
+                <td data-testid={`task-dueDate-${t.id}`} style={styles.td}>
+                  {formatDueDate(t.dueDate)}
+                </td>
+                <td style={{ ...styles.td, textAlign: 'right' }}>
+                  <button
+                    data-testid={`task-edit-${t.id}`}
+                    onClick={() => openEdit(t)}
+                    style={styles.linkBtn}
+                  >
+                    Edit
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
 
-      {/* Create modal */}
-      {showCreate && (
-        <TaskModal
-          onClose={() => setShowCreate(false)}
-          onSave={handleCreate}
-        />
-      )}
+      {showForm && (
+        <div style={styles.overlay}>
+          <div data-testid="task-form-page" style={styles.modal}>
+            <h2 style={{ marginTop: 0 }}>{formTitle}</h2>
 
-      {/* Edit modal */}
-      {editTask && (
-        <TaskModal
-          task={editTask}
-          onClose={() => setEditTask(null)}
-          onSave={handleUpdate}
-        />
-      )}
-
-      {/* Delete confirm dialog */}
-      {deleteTarget && (
-        <div
-          data-testid="delete-overlay"
-          style={{ ...styles.overlay }}
-          onClick={(e) => { if (e.target === e.currentTarget) setDeleteTarget(null); }}
-        >
-          <div data-testid="delete-dialog" style={styles.dialog} role="alertdialog" aria-modal="true">
-            <h3 style={{ margin: '0 0 10px' }}>Delete Task</h3>
-            <p style={{ margin: '0 0 16px', color: '#374151', fontSize: 14 }}>
-              Are you sure you want to delete <strong>"{deleteTarget.title}"</strong>? This cannot be undone.
-            </p>
-            {deleteError && (
-              <div data-testid="delete-error" style={styles.alertError}>{deleteError}</div>
+            {formError && (
+              <div data-testid="task-form-error" style={styles.errorBanner}>
+                {formError}
+              </div>
             )}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              <button
-                data-testid="btn-delete-cancel"
-                onClick={() => { setDeleteTarget(null); setDeleteError(''); }}
-                style={styles.btnSecondary}
+
+            <div style={styles.field}>
+              <label style={styles.label} htmlFor="task-title">
+                Title
+              </label>
+              <input
+                id="task-title"
+                data-testid="task-title-input"
+                value={form.title}
+                onChange={(ev) => setForm((p) => ({ ...p, title: ev.target.value }))}
+              />
+              {fieldErrors.title && (
+                <div data-testid="error-title" style={styles.fieldError}>
+                  {fieldErrors.title}
+                </div>
+              )}
+            </div>
+
+            <div style={styles.field}>
+              <label style={styles.label} htmlFor="task-status">
+                Status
+              </label>
+              <select
+                id="task-status"
+                data-testid="task-status-select"
+                value={form.status}
+                onChange={(ev) =>
+                  setForm((p) => ({
+                    ...p,
+                    status: ev.target.value as TaskStatus,
+                  }))
+                }
               >
+                {STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+              {fieldErrors.status && (
+                <div data-testid="error-status" style={styles.fieldError}>
+                  {fieldErrors.status}
+                </div>
+              )}
+            </div>
+
+            <div style={styles.field}>
+              <label style={styles.label} htmlFor="task-dueDate">
+                Due Date
+              </label>
+              <input
+                id="task-dueDate"
+                type="date"
+                data-testid="task-dueDate-input"
+                value={form.dueDate}
+                onChange={(ev) => setForm((p) => ({ ...p, dueDate: ev.target.value }))}
+              />
+              {fieldErrors.dueDate && (
+                <div data-testid="error-dueDate" style={styles.fieldError}>
+                  {fieldErrors.dueDate}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button data-testid="task-cancel-btn" onClick={closeForm} disabled={saving}>
                 Cancel
               </button>
-              <button
-                data-testid="btn-delete-confirm"
-                onClick={handleDelete}
-                style={{ ...styles.btnPrimary, background: '#ef4444' }}
-              >
-                Delete
+              <button data-testid="task-save-btn" onClick={submit} disabled={saving}>
+                {saving ? 'Saving…' : 'Save'}
               </button>
             </div>
           </div>
@@ -238,39 +260,69 @@ export default function App() {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  page: { maxWidth: 900, margin: '0 auto', padding: '24px 16px', fontFamily: 'system-ui, sans-serif' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  heading: { margin: 0, fontSize: 22, fontWeight: 700 },
-  controls: { display: 'flex', gap: 12, alignItems: 'flex-end', marginBottom: 16, flexWrap: 'wrap' },
-  controlGroup: { display: 'flex', flexDirection: 'column', gap: 3 },
-  controlLabel: { fontSize: 12, fontWeight: 600, color: '#6b7280' },
-  input: {
-    padding: '7px 10px', border: '1px solid #d1d5db', borderRadius: 5,
-    fontSize: 14, outline: 'none', boxSizing: 'border-box',
+  page: {
+    maxWidth: 900,
+    margin: '0 auto',
+    padding: 24,
+    fontFamily: 'system-ui, sans-serif',
   },
-  tableWrapper: { overflowX: 'auto' },
-  table: { width: '100%', borderCollapse: 'collapse', background: '#fff' },
-  th: { padding: '10px 12px', textAlign: 'left', fontSize: 13, fontWeight: 600, color: '#6b7280' },
-  muted: { color: '#9ca3af', margin: '32px 0', textAlign: 'center' },
-  alertError: {
-    color: '#b91c1c', background: '#fef2f2', border: '1px solid #fecaca',
-    borderRadius: 5, padding: '8px 12px', marginBottom: 12, fontSize: 14,
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  h1: { margin: 0 },
+  table: { width: '100%', borderCollapse: 'collapse' },
+  th: {
+    textAlign: 'left',
+    borderBottom: '1px solid #e5e7eb',
+    padding: 8,
+    color: '#6b7280',
+  },
+  td: { borderBottom: '1px solid #f3f4f6', padding: 8 },
+  badge: { padding: '2px 6px', borderRadius: 4, background: '#eef2ff' },
+  primaryBtn: {
+    padding: '8px 12px',
+    background: '#2563eb',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 6,
+    cursor: 'pointer',
+  },
+  linkBtn: {
+    background: 'none',
+    border: 'none',
+    color: '#2563eb',
+    cursor: 'pointer',
+    padding: 0,
+    font: 'inherit',
+  },
+  empty: { border: '1px dashed #d1d5db', padding: 18, borderRadius: 8 },
+  errorBanner: {
+    background: '#fef2f2',
+    border: '1px solid #fecaca',
+    color: '#b91c1c',
+    padding: 10,
+    borderRadius: 6,
+    marginBottom: 12,
   },
   overlay: {
-    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0,0,0,0.45)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  dialog: {
-    background: '#fff', borderRadius: 8, padding: 24, width: '100%', maxWidth: 400,
-    boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
+  modal: {
+    background: '#fff',
+    padding: 18,
+    borderRadius: 8,
+    width: '100%',
+    maxWidth: 480,
   },
-  btnPrimary: {
-    padding: '8px 20px', background: '#2563eb', color: '#fff', border: 'none',
-    borderRadius: 5, cursor: 'pointer', fontSize: 14, fontWeight: 600,
-  },
-  btnSecondary: {
-    padding: '8px 20px', background: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db',
-    borderRadius: 5, cursor: 'pointer', fontSize: 14,
-  },
+  field: { display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 12 },
+  label: { fontSize: 12, fontWeight: 600, color: '#374151' },
+  fieldError: { fontSize: 12, color: '#b91c1c' },
 };
-

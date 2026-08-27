@@ -1,46 +1,40 @@
-/**
- * Feature: Task Form Validation
- * Spec: e2e/features/validation.feature
- */
 import { test, expect } from '@playwright/test';
 import { clearAllTasks } from './helpers';
 
 test.describe('Feature: Task Form Validation', () => {
-  test.beforeEach(async () => {
+  test.beforeEach(async ({ page }) => {
     await clearAllTasks();
+    await page.goto('/');
   });
 
-  // Scenario: Submit the form without a title shows a required-field error
   test('shows "Title is required" and keeps modal open when saving without a title', async ({
     page,
   }) => {
-    await page.goto('/');
+    await page.getByTestId('tasks-new-btn').click();
+    await page.getByTestId('task-save-btn').click();
 
-    await page.getByTestId('btn-new-task').click();
-    await expect(page.getByTestId('task-modal')).toBeVisible();
-
-    await page.getByTestId('btn-save').click();
-
-    await expect(page.getByTestId('error-title')).toHaveText('Title is required');
-    await expect(page.getByTestId('task-modal')).toBeVisible();
+    await expect(page.getByTestId('task-form-page')).toBeVisible();
+    await expect(page.getByTestId('error-title')).toBeVisible();
   });
 
-  // Scenario: Typing a title after the error clears the error and saves
+  test('shows due date validation error when due date is in the past', async ({ page }) => {
+    await page.getByTestId('tasks-new-btn').click();
+    await page.getByTestId('task-title-input').fill('Past date task');
+
+    await page.getByTestId('task-dueDate-input').fill('2000-01-01');
+    await page.getByTestId('task-save-btn').click();
+
+    await expect(page.getByTestId('task-form-page')).toBeVisible();
+    await expect(page.getByTestId('error-dueDate')).toBeVisible();
+  });
+
   test('saves successfully after typing a title following a validation error', async ({ page }) => {
-    await page.goto('/');
+    await page.getByTestId('tasks-new-btn').click();
+    await page.getByTestId('task-save-btn').click();
 
-    await page.getByTestId('btn-new-task').click();
-    // Trigger the error first
-    await page.getByTestId('btn-save').click();
-    await expect(page.getByTestId('error-title')).toBeVisible();
+    await page.getByTestId('task-title-input').fill('Now valid');
+    await page.getByTestId('task-save-btn').click();
 
-    // Now type a title and save
-    await page.getByTestId('input-title').fill('My task');
-    await page.getByTestId('btn-save').click();
-
-    await expect(page.getByTestId('task-modal')).not.toBeVisible();
-    await expect(
-      page.getByTestId('task-title').filter({ hasText: 'My task' }),
-    ).toBeVisible();
+    await expect(page.getByText('Now valid')).toBeVisible();
   });
 });

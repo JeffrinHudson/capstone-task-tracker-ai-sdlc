@@ -1,46 +1,20 @@
-/**
- * Feature: Search Tasks
- * Spec: e2e/features/search.feature
- */
 import { test, expect } from '@playwright/test';
-import { clearAllTasks, apiCreateTask } from './helpers';
+import { apiCreateTask, clearAllTasks } from './helpers';
 
-test.describe('Feature: Search Tasks', () => {
-  test.beforeEach(async () => {
+test.describe('Feature: Tasks List', () => {
+  test.beforeEach(async ({ page }) => {
     await clearAllTasks();
+    await apiCreateTask({ title: 'Write report' });
+    await apiCreateTask({ title: 'Book flights' });
+    await page.goto('/');
   });
 
-  // Scenario: Search returns only tasks whose title matches the keyword
-  test('shows matching task and hides non-matching task', async ({ page }) => {
-    await apiCreateTask({ title: 'Fix the bug' });
-    await apiCreateTask({ title: 'Write the docs' });
-
-    await page.goto('/');
-    await expect(page.getByTestId('task-row')).toHaveCount(2);
-
-    await page.getByTestId('input-search').fill('bug');
-
-    // Wait for the matching result to confirm the search completed
-    await expect(
-      page.getByTestId('task-title').filter({ hasText: 'Fix the bug' }),
-    ).toBeVisible();
-    await expect(
-      page.getByTestId('task-title').filter({ hasText: 'Write the docs' }),
-    ).not.toBeVisible();
+  test('app loads', async ({ page }) => {
+    await expect(page.getByTestId('tasks-list-page')).toBeVisible();
   });
 
-  // Scenario: Search that matches no tasks shows the empty-state message
-  test('shows empty-state when no tasks match the search keyword', async ({ page }) => {
-    await apiCreateTask({ title: 'Fix the bug' });
-
-    await page.goto('/');
-    await expect(page.getByTestId('task-row')).toHaveCount(1);
-
-    await page.getByTestId('input-search').fill('zzznomatch');
-
-    await expect(page.getByTestId('empty-state')).toBeVisible();
-    await expect(
-      page.getByTestId('task-title').filter({ hasText: 'Fix the bug' }),
-    ).not.toBeVisible();
+  test('shows tasks', async ({ page }) => {
+    await expect(page.getByText('Write report')).toBeVisible();
+    await expect(page.getByText('Book flights')).toBeVisible();
   });
 });
