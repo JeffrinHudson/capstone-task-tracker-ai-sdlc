@@ -43,6 +43,8 @@ export default function App() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<TaskStatus | 'ALL'>('ALL');
   const [priorityFilter, setPriorityFilter] = useState<TaskPriority | 'ALL'>('ALL');
+  const [dueAfter, setDueAfter] = useState('');
+  const [dueBefore, setDueBefore] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -52,6 +54,8 @@ export default function App() {
         q: search.trim() ? search.trim() : undefined,
         status: statusFilter === 'ALL' ? undefined : [statusFilter],
         priority: priorityFilter === 'ALL' ? undefined : [priorityFilter],
+        dueAfter: dueAfter.trim() ? dueAfter.trim() : undefined,
+        dueBefore: dueBefore.trim() ? dueBefore.trim() : undefined,
       });
       setItems(data);
     } catch (e) {
@@ -59,7 +63,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [priorityFilter, search, statusFilter]);
+  }, [dueAfter, dueBefore, priorityFilter, search, statusFilter]);
 
   useEffect(() => {
     load();
@@ -85,6 +89,14 @@ export default function App() {
 
   function closeForm() {
     setShowForm(false);
+  }
+
+  function resetFilters() {
+    setSearch('');
+    setStatusFilter('ALL');
+    setPriorityFilter('ALL');
+    setDueAfter('');
+    setDueBefore('');
   }
 
   async function submit() {
@@ -166,26 +178,56 @@ export default function App() {
           </select>
         </label>
 
+        <label style={styles.filterLabel}>
+          <span style={styles.filterLabelText}>Due after</span>
+          <input
+            type="date"
+            data-testid="tasks-due-after-input"
+            value={dueAfter}
+            onChange={(e) => setDueAfter(e.target.value)}
+          />
+        </label>
+
+        <label style={styles.filterLabel}>
+          <span style={styles.filterLabelText}>Due before</span>
+          <input
+            type="date"
+            data-testid="tasks-due-before-input"
+            value={dueBefore}
+            onChange={(e) => setDueBefore(e.target.value)}
+          />
+        </label>
+
         <button data-testid="tasks-apply-filters-btn" onClick={load} style={styles.secondaryBtn}>
           Apply
+        </button>
+        <button
+          data-testid="tasks-reset-filters-btn"
+          onClick={resetFilters}
+          style={styles.secondaryBtn}
+          type="button"
+        >
+          Reset
         </button>
       </section>
 
       {loadError && (
         <div data-testid="tasks-load-error" style={styles.errorBanner}>
           {loadError}{' '}
-          <button onClick={load} style={styles.linkBtn}>
+          <button data-testid="tasks-retry-btn" onClick={load} style={styles.linkBtn}>
             Retry
           </button>
         </div>
       )}
 
       {loading ? (
-        <div style={{ padding: 12 }}>Loading…</div>
+        <div data-testid="tasks-loading" style={{ padding: 12 }}>
+          Loading…
+        </div>
       ) : items.length === 0 ? (
         <div data-testid="tasks-empty" style={styles.empty}>
           <div style={{ marginBottom: 12 }}>No tasks yet</div>
-          <button data-testid="tasks-new-btn" onClick={openCreate} style={styles.primaryBtn}>
+          <button data-testid="tasks-empty-new-btn" onClick={openCreate} style={styles.primaryBtn}>
             New Task
           </button>
         </div>
@@ -231,7 +273,7 @@ export default function App() {
       )}
 
       {showForm && (
-        <div style={styles.overlay}>
+        <div data-testid="task-form-overlay" style={styles.overlay}>
           <div data-testid="task-form-page" style={styles.modal}>
             <h2 style={{ marginTop: 0 }}>{formTitle}</h2>
 
