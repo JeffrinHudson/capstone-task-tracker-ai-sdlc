@@ -1,4 +1,4 @@
-import type { Task, TaskFormData } from './types';
+import type { Task, TaskFormData, TaskListQuery } from './types';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
 
@@ -24,8 +24,22 @@ async function handleResponse<T>(res: Response): Promise<T> {
   return body as T;
 }
 
-export async function fetchTasks(): Promise<Task[]> {
-  const res = await fetch(`${API_BASE}/api/tasks`);
+function toQueryString(query?: TaskListQuery): string {
+  if (!query) return '';
+  const params = new URLSearchParams();
+
+  if (query.q) params.set('q', query.q);
+  if (query.status?.length) params.set('status', query.status.join(','));
+  if (query.priority?.length) params.set('priority', query.priority.join(','));
+  if (query.dueBefore) params.set('dueBefore', query.dueBefore);
+  if (query.dueAfter) params.set('dueAfter', query.dueAfter);
+
+  const s = params.toString();
+  return s ? `?${s}` : '';
+}
+
+export async function fetchTasks(query?: TaskListQuery): Promise<Task[]> {
+  const res = await fetch(`${API_BASE}/api/tasks${toQueryString(query)}`);
   const data = await handleResponse<{ items: Task[] }>(res);
   return data.items;
 }
@@ -43,6 +57,7 @@ export async function createTask(data: TaskFormData): Promise<Task> {
     body: JSON.stringify({
       title: data.title,
       status: data.status,
+      priority: data.priority,
       // send '' through, backend normalizes to null
       dueDate: data.dueDate,
     }),
@@ -58,8 +73,29 @@ export async function updateTask(id: string, data: TaskFormData): Promise<Task> 
     body: JSON.stringify({
       title: data.title,
       status: data.status,
+      priority: data.priority,
       dueDate: data.dueDate === '' ? null : data.dueDate,
     }),
+  });
+  const out = await handleResponse<{ item: Task }>(res);
+  return out.item;
+}
+
+export async function updateTaskStatus(id: string, status: Task['status']): Promise<Task> {
+  const res = await fetch(`${API_BASE}/api/tasks/${id}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
+  const out = await handleResponse<{ item: Task }>(res);
+  return out.item;
+}
+
+export async function updateTaskPriority(id: string, priority: Task['priority']): Promise<Task> {
+  const res = await fetch(`${API_BASE}/api/tasks/${id}/priority`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ priority }),
   });
   const out = await handleResponse<{ item: Task }>(res);
   return out.item;

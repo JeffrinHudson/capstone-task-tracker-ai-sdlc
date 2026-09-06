@@ -13,17 +13,25 @@ enum TaskStatus {
   DONE
 }
 
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 model Task {
-  id        String     @id @default(cuid())
+  id        String       @id @default(cuid())
   title     String
-  status    TaskStatus @default(TODO)
+  status    TaskStatus   @default(TODO)
+  priority  TaskPriority @default(MEDIUM)
 
   /// Date-only ISO format: "YYYY-MM-DD"
   dueDate   String?
 
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
 
   @@index([status])
   @@index([dueDate])
+  @@index([priority])
 }

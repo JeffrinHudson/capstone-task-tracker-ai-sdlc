@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { Task, TaskFormData, TaskStatus } from './types';
+import type { Task, TaskFormData, TaskPriority, TaskStatus } from './types';
 import { createTask, fetchTasks, updateTask } from './api';
 
 const STATUSES: TaskStatus[] = ['TODO', 'IN_PROGRESS', 'DONE'];
+const PRIORITIES: TaskPriority[] = ['LOW', 'MEDIUM', 'HIGH'];
 
 type ApiErrorResponse = {
   error?: {
@@ -31,6 +32,7 @@ export default function App() {
   const [form, setForm] = useState<TaskFormData>({
     title: '',
     status: 'TODO',
+    priority: 'MEDIUM',
     dueDate: '',
   });
   const [saving, setSaving] = useState(false);
@@ -38,18 +40,26 @@ export default function App() {
   const [formError, setFormError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<TaskStatus | 'ALL'>('ALL');
+  const [priorityFilter, setPriorityFilter] = useState<TaskPriority | 'ALL'>('ALL');
+
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError('');
     try {
-      const data = await fetchTasks();
+      const data = await fetchTasks({
+        q: search.trim() ? search.trim() : undefined,
+        status: statusFilter === 'ALL' ? undefined : [statusFilter],
+        priority: priorityFilter === 'ALL' ? undefined : [priorityFilter],
+      });
       setItems(data);
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [priorityFilter, search, statusFilter]);
 
   useEffect(() => {
     load();
@@ -59,7 +69,7 @@ export default function App() {
 
   function openCreate() {
     setEditing(null);
-    setForm({ title: '', status: 'TODO', dueDate: '' });
+    setForm({ title: '', status: 'TODO', priority: 'MEDIUM', dueDate: '' });
     setFormError('');
     setFieldErrors({});
     setShowForm(true);
@@ -67,7 +77,7 @@ export default function App() {
 
   function openEdit(t: Task) {
     setEditing(t);
-    setForm({ title: t.title, status: t.status, dueDate: t.dueDate ?? '' });
+    setForm({ title: t.title, status: t.status, priority: t.priority, dueDate: t.dueDate ?? '' });
     setFormError('');
     setFieldErrors({});
     setShowForm(true);
@@ -115,6 +125,52 @@ export default function App() {
         </button>
       </header>
 
+      <section data-testid="tasks-filters" style={styles.filters}>
+        <input
+          data-testid="tasks-search-input"
+          placeholder="Search title…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={styles.searchInput}
+        />
+
+        <label style={styles.filterLabel}>
+          <span style={styles.filterLabelText}>Status</span>
+          <select
+            data-testid="tasks-status-filter"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as TaskStatus | 'ALL')}
+          >
+            <option value="ALL">ALL</option>
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label style={styles.filterLabel}>
+          <span style={styles.filterLabelText}>Priority</span>
+          <select
+            data-testid="tasks-priority-filter"
+            value={priorityFilter}
+            onChange={(e) => setPriorityFilter(e.target.value as TaskPriority | 'ALL')}
+          >
+            <option value="ALL">ALL</option>
+            {PRIORITIES.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <button data-testid="tasks-apply-filters-btn" onClick={load} style={styles.secondaryBtn}>
+          Apply
+        </button>
+      </section>
+
       {loadError && (
         <div data-testid="tasks-load-error" style={styles.errorBanner}>
           {loadError}{' '}
@@ -139,6 +195,7 @@ export default function App() {
             <tr>
               <th style={styles.th}>Title</th>
               <th style={styles.th}>Status</th>
+              <th style={styles.th}>Priority</th>
               <th style={styles.th}>Due Date</th>
               <th style={styles.th}></th>
             </tr>
@@ -151,6 +208,9 @@ export default function App() {
                 </td>
                 <td data-testid={`task-status-${t.id}`} style={styles.td}>
                   <span style={styles.badge}>{t.status}</span>
+                </td>
+                <td data-testid={`task-priority-${t.id}`} style={styles.td}>
+                  <span style={styles.badgePriority}>{t.priority}</span>
                 </td>
                 <td data-testid={`task-dueDate-${t.id}`} style={styles.td}>
                   {formatDueDate(t.dueDate)}
@@ -227,6 +287,34 @@ export default function App() {
             </div>
 
             <div style={styles.field}>
+              <label style={styles.label} htmlFor="task-priority">
+                Priority
+              </label>
+              <select
+                id="task-priority"
+                data-testid="task-priority-select"
+                value={form.priority}
+                onChange={(ev) =>
+                  setForm((p) => ({
+                    ...p,
+                    priority: ev.target.value as TaskPriority,
+                  }))
+                }
+              >
+                {PRIORITIES.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+              {fieldErrors.priority && (
+                <div data-testid="error-priority" style={styles.fieldError}>
+                  {fieldErrors.priority}
+                </div>
+              )}
+            </div>
+
+            <div style={styles.field}>
               <label style={styles.label} htmlFor="task-dueDate">
                 Due Date
               </label>
@@ -273,6 +361,24 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 16,
   },
   h1: { margin: 0 },
+  filters: {
+    display: 'flex',
+    gap: 10,
+    alignItems: 'flex-end',
+    flexWrap: 'wrap',
+    marginBottom: 14,
+  },
+  filterLabel: { display: 'flex', flexDirection: 'column', gap: 4 },
+  filterLabelText: { fontSize: 12, fontWeight: 600, color: '#374151' },
+  searchInput: { minWidth: 220 },
+  secondaryBtn: {
+    padding: '8px 12px',
+    background: '#111827',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 6,
+    cursor: 'pointer',
+  },
   table: { width: '100%', borderCollapse: 'collapse' },
   th: {
     textAlign: 'left',
@@ -282,6 +388,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   td: { borderBottom: '1px solid #f3f4f6', padding: 8 },
   badge: { padding: '2px 6px', borderRadius: 4, background: '#eef2ff' },
+  badgePriority: { padding: '2px 6px', borderRadius: 4, background: '#ecfeff' },
   primaryBtn: {
     padding: '8px 12px',
     background: '#2563eb',
