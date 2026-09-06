@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 const BASE = process.env.API_URL ?? 'http://localhost:3001';
 
 type Task = {
-  id: number;
+  id: string;
   title: string;
   status: 'TODO' | 'IN_PROGRESS' | 'DONE';
   priority: 'LOW' | 'MEDIUM' | 'HIGH';
@@ -28,7 +28,12 @@ async function clearAllTasks(): Promise<void> {
   const { res, body } = await api('/api/tasks?status=TODO');
   assert.equal(res.status, 200);
   const items = (body?.items ?? []) as Task[];
-  await Promise.all(items.map((t) => fetch(`${BASE}/api/tasks/${t.id}`, { method: 'DELETE' })));
+  await Promise.all(
+    items.map(async (t) => {
+      const del = await fetch(`${BASE}/api/tasks/${t.id}`, { method: 'DELETE' });
+      assert.equal(del.status, 204);
+    })
+  );
 }
 
 test.beforeEach(async () => {
