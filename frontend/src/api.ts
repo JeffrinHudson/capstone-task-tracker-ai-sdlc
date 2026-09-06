@@ -1,69 +1,98 @@
-import type { Task, TaskFormData } from './types';
+import type { Task, TaskFormData, TaskListQuery } from './types';
 
-const BASE = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000') + '/api/tasks';
+const API_BASE = import.meta.env.VITE_API_URL ?? '/api';
+
+type ApiErrorResponse = {
+  error?: string;
+};
 
 async function handleResponse<T>(res: Response): Promise<T> {
-  if (res.status === 204) return undefined as T;
-  const body = await res.json().catch(() => ({ message: res.statusText }));
-  if (!res.ok) throw new Error(body?.message ?? 'Request failed');
+  const body = (await res.json().catch(() => ({ error: res.statusText }))) as unknown;
+
+  if (!res.ok) {
+    const parsed = body as ApiErrorResponse;
+    const msg = parsed?.error ?? 'Request failed';
+    const err = new Error(msg);
+    (err as unknown as { payload?: unknown }).payload = body;
+    throw err;
+  }
+
   return body as T;
 }
 
-export async function fetchTasks(params: {
-  q?: string;
-  status?: string;
-  sortBy?: string;
-  sortDir?: string;
-}): Promise<Task[]> {
-  const search = new URLSearchParams();
-  if (params.q) search.set('q', params.q);
-  if (params.status && params.status !== 'ALL') search.set('status', params.status);
-  if (params.sortBy) search.set('sortBy', params.sortBy);
-  if (params.sortDir) search.set('sortDir', params.sortDir);
-  const qs = search.toString();
-  const res = await fetch(`${BASE}${qs ? '?' + qs : ''}`);
-  return handleResponse<Task[]>(res);
+function toQueryString(query?: TaskListQuery): string {
+  if (!query) return '';
+  const params = new URLSearchParams();
+
+  if (query.q) params.set('q', query.q);
+  if (query.status?.length) params.set('status', query.status.join(','));
+  if (query.priority?.length) params.set('priority', query.priority.join(','));
+  if (query.dueBefore) params.set('dueBefore', query.dueBefore);
+  if (query.dueAfter) params.set('dueAfter', query.dueAfter);
+
+  const s = params.toString();
+  return s ? `?${s}` : '';
+}
+
+export async function fetchTasks(query?: TaskListQuery): Promise<Task[]> {
+  const res = await fetch(`${API_BASE}/tasks${toQueryString(query)}`);
+  const data = await handleResponse<{ items: Task[] }>(res);
+  return data.items;
+}
+
+export async function fetchTask(id: string): Promise<Task> {
+  const res = await fetch(`${API_BASE}/tasks/${id}`);
+  const data = await handleResponse<{ item: Task }>(res);
+  return data.item;
 }
 
 export async function createTask(data: TaskFormData): Promise<Task> {
-  const res = await fetch(BASE, {
+  const res = await fetch(`${API_BASE}/tasks`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       title: data.title,
-      description: data.description || undefined,
+      status: data.status,
       priority: data.priority,
-      dueDate: data.dueDate || undefined,
+      // send '' through, backend normalizes to null
+      dueDate: data.dueDate,
     }),
   });
-  return handleResponse<Task>(res);
+  const out = await handleResponse<{ item: Task }>(res);
+  return out.item;
 }
 
-export async function updateTask(id: string, data: TaskFormData & { status: string }): Promise<Task> {
-  const res = await fetch(`${BASE}/${id}`, {
+export async function updateTask(id: string, data: TaskFormData): Promise<Task> {
+  const res = await fetch(`${API_BASE}/tasks/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       title: data.title,
-      description: data.description || undefined,
       status: data.status,
       priority: data.priority,
-      dueDate: data.dueDate || undefined,
+      dueDate: data.dueDate === '' ? null : data.dueDate,
     }),
   });
-  return handleResponse<Task>(res);
+  const out = await handleResponse<{ item: Task }>(res);
+  return out.item;
 }
 
-export async function patchTaskStatus(id: string, status: 'OPEN' | 'DONE'): Promise<Task> {
-  const res = await fetch(`${BASE}/${id}/status`, {
+export async function updateTaskStatus(id: string, status: Task['status']): Promise<Task> {
+  const res = await fetch(`${API_BASE}/tasks/${id}/status`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status }),
   });
-  return handleResponse<Task>(res);
+  const out = await handleResponse<{ item: Task }>(res);
+  return out.item;
 }
 
-export async function deleteTask(id: string): Promise<void> {
-  const res = await fetch(`${BASE}/${id}`, { method: 'DELETE' });
-  return handleResponse<void>(res);
+export async function updateTaskPriority(id: string, priority: Task['priority']): Promise<Task> {
+  const res = await fetch(`${API_BASE}/tasks/${id}/priority`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ priority }),
+  });
+  const out = await handleResponse<{ item: Task }>(res);
+  return out.item;
 }

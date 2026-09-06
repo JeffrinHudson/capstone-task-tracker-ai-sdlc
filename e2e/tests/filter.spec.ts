@@ -1,60 +1,41 @@
-/**
- * Feature: Filter Tasks by Status
- * Spec: e2e/features/filter.feature
- */
 import { test, expect } from '@playwright/test';
-import { clearAllTasks, apiCreateTask, apiPatchStatus } from './helpers';
+import { apiCreateTask, clearAllTasks } from './helpers';
 
-test.describe('Feature: Filter Tasks by Status', () => {
-  test.beforeEach(async () => {
+function nextDateOnly(offsetDays: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  return d.toISOString().slice(0, 10);
+}
+
+test.describe('Feature: Tasks List', () => {
+  test.beforeEach(async ({ page }) => {
     await clearAllTasks();
-    const open = await apiCreateTask({ title: 'Write tests' });
-    const done = await apiCreateTask({ title: 'Read README' });
-    await apiPatchStatus(done.id, 'DONE');
-    // Suppress unused-variable warning; ids are used via side-effects above
-    void open;
+    await apiCreateTask({ title: 'Task A', status: 'TODO', dueDate: nextDateOnly(2) });
+    await apiCreateTask({ title: 'Task B', status: 'DONE', dueDate: nextDateOnly(10) });
+    await apiCreateTask({ title: 'Task C', status: 'DONE' });
+    await page.goto('/');
   });
 
-  // Scenario: Selecting "Open" shows only open tasks
-  test('shows only open tasks when Open filter is selected', async ({ page }) => {
-    await page.goto('/');
-
-    await page.getByTestId('select-status-filter').selectOption('OPEN');
-
-    await expect(
-      page.getByTestId('task-title').filter({ hasText: 'Write tests' }),
-    ).toBeVisible();
-    await expect(
-      page.getByTestId('task-title').filter({ hasText: 'Read README' }),
-    ).not.toBeVisible();
+  test('shows tasks in table', async ({ page }) => {
+    await expect(page.getByTestId('tasks-table')).toBeVisible();
+    await expect(page.getByText('Task A')).toBeVisible();
+    await expect(page.getByText('Task B')).toBeVisible();
   });
 
-  // Scenario: Selecting "Done" shows only completed tasks
-  test('shows only done tasks when Done filter is selected', async ({ page }) => {
-    await page.goto('/');
+  test('filters tasks by due date window', async ({ page }) => {
+    await page.getByTestId('tasks-due-after-input').fill(nextDateOnly(1));
+    await page.getByTestId('tasks-due-before-input').fill(nextDateOnly(5));
+    await page.getByTestId('tasks-apply-filters-btn').click();
 
-    await page.getByTestId('select-status-filter').selectOption('DONE');
+    await expect(page.getByText('Task A')).toBeVisible();
+    await expect(page.getByText('Task B')).not.toBeVisible();
+    await expect(page.getByText('Task C')).not.toBeVisible();
 
-    await expect(
-      page.getByTestId('task-title').filter({ hasText: 'Read README' }),
-    ).toBeVisible();
-    await expect(
-      page.getByTestId('task-title').filter({ hasText: 'Write tests' }),
-    ).not.toBeVisible();
-  });
+    await page.getByTestId('tasks-reset-filters-btn').click();
+    await page.getByTestId('tasks-apply-filters-btn').click();
 
-  // Scenario: Selecting "All" shows every task regardless of status
-  test('shows all tasks when All filter is selected', async ({ page }) => {
-    await page.goto('/');
-
-    // Default is All; explicitly select it to mirror the Gherkin step
-    await page.getByTestId('select-status-filter').selectOption('ALL');
-
-    await expect(
-      page.getByTestId('task-title').filter({ hasText: 'Write tests' }),
-    ).toBeVisible();
-    await expect(
-      page.getByTestId('task-title').filter({ hasText: 'Read README' }),
-    ).toBeVisible();
+    await expect(page.getByText('Task A')).toBeVisible();
+    await expect(page.getByText('Task B')).toBeVisible();
+    await expect(page.getByText('Task C')).toBeVisible();
   });
 });
