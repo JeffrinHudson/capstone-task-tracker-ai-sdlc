@@ -12,19 +12,18 @@ export class AppError extends Error {
   }
 }
 
+function toPublicErrorMessage(err: AppError): string {
+  // Phase 4 requirement: 400/404 => { error: string }
+  // Prefer message, fall back to code.
+  return err.message || err.code || 'Bad Request';
+}
+
 export const errorHandler: ErrorRequestHandler = (err, _req, res, next) => {
   if (err instanceof AppError) {
-    res.status(err.statusCode).json({
-      error: {
-        code: err.code,
-        message: err.message,
-        ...(err.fields ? { fields: err.fields } : {}),
-      },
-    });
+    res.status(err.statusCode).json({ error: toPublicErrorMessage(err) });
     return;
   }
 
   console.error(err);
-  res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Unexpected error' } });
-  next();
+  res.status(500).json({ error: 'Internal Server Error' });
 };

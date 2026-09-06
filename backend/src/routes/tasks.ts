@@ -13,6 +13,7 @@ type TaskInput = {
   status?: unknown;
   dueDate?: unknown;
   priority?: unknown;
+  completed?: unknown;
 };
 
 function toTrimmedString(val: unknown): string {
@@ -27,6 +28,25 @@ function todayDateOnly(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function parseTaskId(raw: string): string {
+  const id = String(raw ?? '').trim();
+  // Accept both current cuid() IDs and legacy UUID-style IDs present in older local DBs.
+  const isCuid = /^c[a-z0-9]{24}$/i.test(id);
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+  if (!isCuid && !isUuid) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'Invalid id');
+  }
+  return id;
+}
+
+function parseCompleted(input: TaskInput): boolean | undefined {
+  if (input.completed === undefined) return undefined;
+  if (typeof input.completed !== 'boolean') {
+    throw new AppError(400, 'VALIDATION_ERROR', 'Invalid input');
+  }
+  return input.completed;
+}
+
 function validateTaskInput(
   input: TaskInput,
   opts: { statusRequired: boolean }
@@ -36,23 +56,25 @@ function validateTaskInput(
   dueDate: string | null;
   priority: TaskPriority;
 } {
-  const fields: Record<string, string> = {};
-
   const title = toTrimmedString(input?.title);
-  if (!title) fields.title = 'Title is required';
-  else if (title.length < 1 || title.length > 200) fields.title = 'Title must be 1–200 characters';
+  if (!title) throw new AppError(400, 'VALIDATION_ERROR', 'Title is required');
+  if (title.length > 120) throw new AppError(400, 'VALIDATION_ERROR', 'Title must be <= 120 characters');
 
   const rawStatus = input?.status;
   const statusToUse = (rawStatus ?? TaskStatus.TODO) as TaskStatus;
 
-  if (opts.statusRequired && rawStatus === undefined) fields.status = 'Status is required';
-  if (!VALID_STATUSES.includes(statusToUse))
-    fields.status = 'Status must be TODO, IN_PROGRESS, or DONE';
+  if (opts.statusRequired && rawStatus === undefined) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'Status is required');
+  }
+  if (!VALID_STATUSES.includes(statusToUse)) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'Invalid status');
+  }
 
   const rawPriority = input?.priority;
   const priorityToUse = (rawPriority ?? TaskPriority.MEDIUM) as TaskPriority;
-  if (!VALID_PRIORITIES.includes(priorityToUse))
-    fields.priority = 'Priority must be LOW, MEDIUM, or HIGH';
+  if (!VALID_PRIORITIES.includes(priorityToUse)) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'Invalid priority');
+  }
 
   let dueDate: string | null = null;
   // normalize dueDate "" to null
@@ -60,13 +82,9 @@ function validateTaskInput(
     dueDate = null;
   } else {
     const s = String(input.dueDate);
-    if (!isValidDateOnly(s)) fields.dueDate = 'Due date must be YYYY-MM-DD';
-    else if (s < todayDateOnly()) fields.dueDate = 'Due date cannot be in the past';
-    else dueDate = s;
-  }
-
-  if (Object.keys(fields).length) {
-    throw new AppError(400, 'VALIDATION_ERROR', 'Invalid input', fields);
+    if (!isValidDateOnly(s)) throw new AppError(400, 'VALIDATION_ERROR', 'Due date must be YYYY-MM-DD');
+    if (s < todayDateOnly()) throw new AppError(400, 'VALIDATION_ERROR', 'Due date cannot be in the past');
+    dueDate = s;
   }
 
   return { title, status: statusToUse, dueDate, priority: priorityToUse };
@@ -92,9 +110,7 @@ function parseEnumList<T extends string>(raw: string | undefined, valid: readonl
 
   const invalid = uniq.filter((x) => !valid.includes(x));
   if (invalid.length) {
-    throw new AppError(400, 'VALIDATION_ERROR', 'Invalid query params', {
-      filter: `Invalid values: ${invalid.join(', ')}`,
-    });
+    throw new AppError(400, 'VALIDATION_ERROR', 'Invalid query params');
   }
 
   return uniq;
@@ -111,22 +127,16 @@ router.get('/', async (req, res, next) => {
     const dueBeforeRaw = toTrimmedString(req.query.dueBefore);
     const dueAfterRaw = toTrimmedString(req.query.dueAfter);
 
-    const fields: Record<string, string> = {};
-
     let dueBefore: string | undefined;
     if (dueBeforeRaw) {
-      if (!isValidDateOnly(dueBeforeRaw)) fields.dueBefore = 'dueBefore must be YYYY-MM-DD';
-      else dueBefore = dueBeforeRaw;
+      if (!isValidDateOnly(dueBeforeRaw)) throw new AppError(400, 'VALIDATION_ERROR', 'dueBefore must be YYYY-MM-DD');
+      dueBefore = dueBeforeRaw;
     }
 
     let dueAfter: string | undefined;
     if (dueAfterRaw) {
-      if (!isValidDateOnly(dueAfterRaw)) fields.dueAfter = 'dueAfter must be YYYY-MM-DD';
-      else dueAfter = dueAfterRaw;
-    }
-
-    if (Object.keys(fields).length) {
-      throw new AppError(400, 'VALIDATION_ERROR', 'Invalid query params', fields);
+      if (!isValidDateOnly(dueAfterRaw)) throw new AppError(400, 'VALIDATION_ERROR', 'dueAfter must be YYYY-MM-DD');
+      dueAfter = dueAfterRaw;
     }
 
     const where: Prisma.TaskWhereInput = {
@@ -136,7 +146,6 @@ router.get('/', async (req, res, next) => {
         ? {
             title: {
               contains: q,
-              mode: 'insensitive',
             },
           }
         : null),
@@ -160,7 +169,8 @@ router.get('/', async (req, res, next) => {
 // GET /api/tasks/:id
 router.get('/:id', async (req, res, next) => {
   try {
-    const item = await prisma.task.findUnique({ where: { id: req.params.id } });
+    const id = parseTaskId(req.params.id);
+    const item = await prisma.task.findUnique({ where: { id } });
     if (!item) throw new AppError(404, 'NOT_FOUND', 'Task not found');
     res.json({ item });
   } catch (e) {
@@ -172,7 +182,12 @@ router.get('/:id', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   try {
     const data = validateTaskInput(req.body as TaskInput, { statusRequired: false });
-    const item = await prisma.task.create({ data });
+    // validate optional completed (HITL/Phase 4), but don't persist (model uses status).
+    parseCompleted(req.body as TaskInput);
+
+    const item = await prisma.task.create({
+      data,
+    });
     res.status(201).json({ item });
   } catch (e) {
     next(e);
@@ -182,11 +197,11 @@ router.post('/', async (req, res, next) => {
 // PUT /api/tasks/:id
 router.put('/:id', async (req, res, next) => {
   try {
+    const id = parseTaskId(req.params.id);
     const data = validateTaskInput(req.body as TaskInput, { statusRequired: true });
+    parseCompleted(req.body as TaskInput);
 
-    const item = await prisma.task
-      .update({ where: { id: req.params.id }, data })
-      .catch(handleP2025('Task not found'));
+    const item = await prisma.task.update({ where: { id }, data }).catch(handleP2025('Task not found'));
 
     res.json({ item });
   } catch (e) {
@@ -197,17 +212,14 @@ router.put('/:id', async (req, res, next) => {
 // PATCH /api/tasks/:id/status
 router.patch('/:id/status', async (req, res, next) => {
   try {
+    const id = parseTaskId(req.params.id);
     const raw = (req.body as { status?: unknown } | undefined)?.status;
     const status = (raw ?? '') as TaskStatus;
     if (!VALID_STATUSES.includes(status)) {
-      throw new AppError(400, 'VALIDATION_ERROR', 'Invalid input', {
-        status: 'Status must be TODO, IN_PROGRESS, or DONE',
-      });
+      throw new AppError(400, 'VALIDATION_ERROR', 'Invalid status');
     }
 
-    const item = await prisma.task
-      .update({ where: { id: req.params.id }, data: { status } })
-      .catch(handleP2025('Task not found'));
+    const item = await prisma.task.update({ where: { id }, data: { status } }).catch(handleP2025('Task not found'));
 
     res.json({ item });
   } catch (e) {
@@ -218,17 +230,14 @@ router.patch('/:id/status', async (req, res, next) => {
 // PATCH /api/tasks/:id/priority
 router.patch('/:id/priority', async (req, res, next) => {
   try {
+    const id = parseTaskId(req.params.id);
     const raw = (req.body as { priority?: unknown } | undefined)?.priority;
     const priority = (raw ?? '') as TaskPriority;
     if (!VALID_PRIORITIES.includes(priority)) {
-      throw new AppError(400, 'VALIDATION_ERROR', 'Invalid input', {
-        priority: 'Priority must be LOW, MEDIUM, or HIGH',
-      });
+      throw new AppError(400, 'VALIDATION_ERROR', 'Invalid priority');
     }
 
-    const item = await prisma.task
-      .update({ where: { id: req.params.id }, data: { priority } })
-      .catch(handleP2025('Task not found'));
+    const item = await prisma.task.update({ where: { id }, data: { priority } }).catch(handleP2025('Task not found'));
 
     res.json({ item });
   } catch (e) {
@@ -239,11 +248,16 @@ router.patch('/:id/priority', async (req, res, next) => {
 // DELETE /api/tasks/:id (used by e2e helper)
 router.delete('/:id', async (req, res, next) => {
   try {
-    await prisma.task.delete({ where: { id: req.params.id } }).catch(handleP2025('Task not found'));
+    const id = parseTaskId(req.params.id);
+    await prisma.task.delete({ where: { id } }).catch(handleP2025('Task not found'));
     res.status(204).send();
   } catch (e) {
     next(e);
   }
+});
+
+router.all('/:id', (_req, _res, next) => {
+  next(new AppError(405, 'METHOD_NOT_ALLOWED', 'Method not allowed'));
 });
 
 export default router;

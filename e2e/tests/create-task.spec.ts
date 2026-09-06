@@ -26,7 +26,8 @@ test.describe('Feature: Create Task', () => {
     await page.getByTestId('task-save-btn').click();
 
     await expect(page.getByText('Book flights')).toBeVisible();
-    await expect(page.getByText('IN_PROGRESS')).toBeVisible();
+    const row = page.locator('tr', { hasText: 'Book flights' });
+    await expect(row.getByText('IN_PROGRESS')).toBeVisible();
     await expect(page.getByText('2099-12-31')).toBeVisible();
   });
 });

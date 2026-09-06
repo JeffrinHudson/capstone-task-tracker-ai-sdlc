@@ -1,0 +1,5 @@
+{
+  "name": "Capstone AI SDLC HITL Demo",
+  "description": "End-to-end AI-assistant SDLC workflow with Jira, Confluence, Git, QA, deployment, and HITL gates.",
+  "project": "jeffrin_hudson@epam.com"
+}

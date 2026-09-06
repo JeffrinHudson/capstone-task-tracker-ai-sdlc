@@ -201,19 +201,19 @@ npx playwright test tests/create-task.spec.ts --project=chromium
 
 #### HTML report
 
-After a test run the HTML report is written to `e2e/test-results/html-report/`.
+After a test run the HTML report is written to `e2e/playwright-report/`.
 
 ```bash
 # Open the last report in a browser
-npx playwright show-report e2e/test-results/html-report
+npx playwright show-report e2e/playwright-report
 ```
 
 #### Environment variables
 
 | Variable   | Default                 | Purpose                                             |
 | ---------- | ----------------------- | --------------------------------------------------- |
-| `BASE_URL` | `http://localhost:5173` | Frontend URL hit by Playwright                      |
-| `API_URL`  | `http://localhost:3000` | Backend URL used by test helpers for setup/teardown |
+| `BASE_URL` | `http://127.0.0.1:4173` | Frontend URL hit by Playwright                      |
+| `API_URL`  | `http://localhost:3001` | Backend URL used by test helpers for setup/teardown |
 
 ## Build
 

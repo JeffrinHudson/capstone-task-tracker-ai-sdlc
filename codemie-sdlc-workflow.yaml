@@ -1,0 +1,600 @@
+enable_summarization_node: true
+messages_limit_before_summarization: 20
+tokens_limit_before_summarization: 40000
+recursion_limit: 100
+
+assistants:
+  - id: ba
+    assistant_id: 881bc5a5-0938-45b2-9c22-21570d4264d9
+  - id: designer
+    assistant_id: 1e45d019-0ff7-40dc-b984-3e5edcc82f64
+  - id: planner
+    assistant_id: 34c42b51-fd01-43d7-a7b5-1c81d937d567
+  - id: dev
+    assistant_id: 34c42b51-fd01-43d7-a7b5-1c81d937d567
+  - id: reviewer
+    assistant_id: d8124ee1-c315-4da3-8e1b-164752551700
+  - id: qa
+    assistant_id: bf277d7e-7197-4c59-88b6-f082feabe436
+  - id: devops
+    assistant_id: d54c972a-8b03-4ed8-8246-7c9ecf523326
+  - id: writer
+    assistant_id: 8a67e496-227a-46e8-a3f9-bddfd7baaa01
+
+states:
+  - id: scan-and-identify-gaps
+    assistant_id: ba
+    task: |
+      1. Review the existing task tracker repository at C:\Users\jeffrin_hudson\capstone-task-tracker-ai-sdlc.
+      2. Read the current implementation baseline:
+         - backend/prisma/schema.prisma
+         - backend/src/routes/tasks.ts
+         - frontend/src/types.ts
+         - frontend/src/App.tsx
+      3. Identify implemented features, gaps, and enhancement opportunities relative to the Capstone SDLC objective.
+      4. Use Jira to inspect parent issue EPMCDMETST-62112 and related backlog items.
+      5. Compare relevant capabilities with Jira/Asana/Linear patterns (metadata, filtering/search, workflow, due-date UX, validation clarity).
+      6. Produce a prioritized backlog and define epics/stories with acceptance criteria in Gherkin.
+      7. Reliability mode:
+         - If live Jira retrieval is slow/fails, continue from existing issue snapshot and perform at least one live Jira read/update before phase completion.
+
+      Output JSON:
+      {
+        "current_features": ["..."],
+        "gaps": [
+          {
+            "title": "",
+            "description": "",
+            "priority": "high|medium|low",
+            "acceptance_criteria": [
+              "Given ... When ... Then ..."
+            ]
+          }
+        ],
+        "parent_issue": "EPMCDMETST-62112",
+        "epic_key": "EPMCDMETST-####",
+        "story_keys": ["EPMCDMETST-####", "..."],
+        "jira_links": ["https://jira.../browse/EPMCDMETST-####"]
+      }
+    next:
+      state_id: jira-backlog-creation
+      store_in_context: true
+
+  - id: jira-backlog-creation
+    assistant_id: ba
+    task: |
+      1. Draft/update Jira stories for prioritized backlog from the prior step.
+      2. Link each story to parent issue EPMCDMETST-62112 (and epic if created).
+      3. Ensure each story contains summary, description, acceptance criteria, priority, sizing, and dependencies.
+      4. Confirm readiness for human approval and engineering planning.
+      5. Reliability mode:
+         - If full live creation fails, update at least one story live and provide placeholders for remaining stories with explicit follow-up list.
+
+      Output JSON:
+      {
+        "epic_key": "EPMCDMETST-####",
+        "story_keys": ["EPMCDMETST-####", "..."],
+        "jira_links": ["https://jira.../browse/EPMCDMETST-####"]
+      }
+    next:
+      state_id: hitl-requirements
+      store_in_context: true
+
+  - id: hitl-requirements
+    assistant_id: ba
+    interrupt_before: true
+    task: |
+      ## HITL Gate 1 - Requirements Review
+      Epic: {{epic_key}}
+      Stories: {{story_keys}}
+
+      Review analyzed gaps, story scope, and Gherkin acceptance criteria with the human stakeholder.
+      Continue only after explicit human approval.
+    next:
+      state_id: architecture-design
+      clear_prior_messages: true
+      clear_context_store: keep_current
+
+  - id: architecture-design
+    assistant_id: designer
+    task: |
+      1. Fetch story details for {{story_keys}} from Jira.
+      2. Create HLD and LLD for approved enhancements.
+      3. Include component architecture, data flow, API contracts, Prisma schema changes (if any), DB considerations, UI wireframes, and NFR risks.
+      4. Publish artifacts to Confluence personal space (~jeffrin_hudson@epam.com) under parent page id 2921303597.
+      5. If CAP publishing is required by policy, attempt CAP first; on 403 fallback immediately to personal space target above.
+      6. Reliability mode:
+         - If Confluence publishing fails in both targets, return full markdown payloads for manual publish.
+
+      Output JSON:
+      {
+        "publish_status": "published|published_with_fallback|fallback_ready|failed",
+        "target_space": "~jeffrin_hudson@epam.com|CAP",
+        "parent_page_id_used": "2921303597",
+        "lld_doc": "Design summary and rationale",
+        "api_contracts": [
+          {
+            "method": "GET|POST|PUT|PATCH|DELETE",
+            "path": "/api/tasks",
+            "request": {},
+            "response": {}
+          }
+        ],
+        "schema_changes": [
+          "Add or update Prisma model fields and enums required for the enhancement"
+        ],
+        "arch_page_url": "https://confluence...",
+        "lld_page_url": "https://confluence...",
+        "confluence_links": ["https://confluence..."],
+        "fallback_markdown": {
+          "hld_title": "Capstone Task Tracker - HLD",
+          "lld_title": "Capstone Task Tracker - LLD",
+          "hld_body": "...",
+          "lld_body": "..."
+        },
+        "publish_error": ""
+      }
+    next:
+      state_id: hitl-design
+      store_in_context: true
+
+  - id: hitl-design
+    assistant_id: designer
+    interrupt_before: true
+    task: |
+      ## HITL Gate 2 - Architecture and Design Review
+      Publish Status: {{publish_status}}
+      Space: {{target_space}}
+      Parent Page Id: {{parent_page_id_used}}
+      HLD: {{arch_page_url}}
+      LLD: {{lld_page_url}}
+
+      If publish_status=published or publish_status=published_with_fallback:
+      - Review published Confluence pages and approve.
+
+      If publish_status=fallback_ready:
+      - Review fallback_markdown content and approve manual publish plan.
+
+      Continue only after human sign-off.
+    next:
+      state_id: implementation-planning
+      clear_prior_messages: true
+      clear_context_store: keep_current
+
+  - id: implementation-planning
+    assistant_id: planner
+    task: |
+      1. Convert approved design into delivery plan.
+      2. Break work into ordered tasks with dependency/risk checks.
+      3. Identify backend, frontend, database, test, and docs work.
+      4. Prepare branch + PR strategy.
+
+      Output JSON:
+      {
+        "implementation_plan": [
+          "Step 1: database model/schema adjustments",
+          "Step 2: backend API improvements",
+          "Step 3: frontend UX and validation updates",
+          "Step 4: Playwright test coverage",
+          "Step 5: deployment and documentation"
+        ],
+        "branch_name": "feature/task-tracker-enhancements"
+      }
+    next:
+      state_id: code-generation
+      store_in_context: true
+
+  - id: code-generation
+    assistant_id: dev
+    task: |
+      1. Create branch from main: {{branch_name}}.
+      2. Implement approved changes using design and repo constraints:
+         - backend/prisma/schema.prisma as required
+         - backend/src/routes/tasks.ts for filtering/search/validation/status/priority/due-date handling
+         - frontend/src/types.ts and frontend/src/App.tsx with stable data-testid attributes and UX improvements
+      3. Run focused local validation.
+      4. Stage and commit with Jira-keyed message.
+      5. Push branch and open GitHub PR to main.
+
+      Output JSON:
+      {
+        "branch_name": "feature/task-tracker-enhancements",
+        "pr_url": "https://github.com/...",
+        "pr_number": 1
+      }
+    next:
+      state_id: hitl-dev-pr
+      store_in_context: true
+
+  - id: hitl-dev-pr
+    assistant_id: dev
+    interrupt_before: true
+    task: |
+      ## HITL Gate 3 - Pull Request Readiness
+      PR: {{pr_url}}
+
+      Human verifies implementation scope matches approved design and is ready for formal review.
+      Continue only after explicit human confirmation.
+    next:
+      state_id: code-review
+      clear_prior_messages: true
+      clear_context_store: keep_current
+
+  - id: code-review
+    assistant_id: reviewer
+    task: |
+      1. Fetch PR diff for PR #{{pr_number}}.
+      2. Review against OWASP Top 10, TypeScript correctness, repo patterns, security and validation quality.
+      3. Add review comments where needed.
+      4. If quality bar is met, approve PR.
+      5. Keep PR unmerged for human merge decision at the next HITL gate.
+
+      Output JSON:
+      {
+        "issues": [],
+        "approved": true,
+        "ready_for_merge": true
+      }
+    next:
+      state_id: hitl-review
+      store_in_context: true
+
+  - id: hitl-review
+    assistant_id: reviewer
+    interrupt_before: true
+    task: |
+      ## HITL Gate 4 - Code Review and Merge Decision
+      PR #{{pr_number}} reviewed and ready_for_merge={{ready_for_merge}}.
+
+      Human reviews comments and confirms merge decision.
+      Continue only after human approval to merge.
+    next:
+      state_id: merge-pr
+      clear_prior_messages: true
+      clear_context_store: keep_current
+
+  - id: merge-pr
+    assistant_id: reviewer
+    task: |
+      1. Squash-merge PR #{{pr_number}} into main after human approval.
+      2. Confirm merge commit and resulting main branch status.
+
+      Output JSON:
+      {
+        "merged": true,
+        "merge_method": "squash",
+        "merge_commit": "<sha>"
+      }
+    next:
+      state_id: qa-testing
+      store_in_context: true
+
+  - id: qa-testing
+    assistant_id: qa
+    task: |
+      1. Fetch acceptance criteria from Jira stories {{story_keys}}.
+      2. Derive Gherkin scenarios for enhancement behavior.
+      3. Create/update Playwright coverage in e2e/features/ and e2e/tests/.
+      4. Run relevant Playwright suite on the merged state.
+      5. Capture pass/fail and attach results to Jira/Confluence evidence.
+
+      Output JSON:
+      {
+        "test_files": ["e2e/tests/enhancements.spec.ts"],
+        "passed_count": 12,
+        "failed_count": 0,
+        "report_path": "e2e/test-results/html-report/index.html"
+      }
+    next:
+      condition:
+        expression: failed_count == 0
+        then: hitl-qa
+        otherwise: qa-fail-stop
+
+  - id: qa-fail-stop
+    assistant_id: qa
+    interrupt_before: true
+    task: |
+      ## QA Failure Stop
+      Playwright reported failed_count={{failed_count}}.
+
+      Human decides whether to:
+      - return to implementation for fixes, or
+      - stop the run and capture defects.
+
+      Continue only after recording decision and defect links.
+    next:
+      state_id: end
+
+  - id: hitl-qa
+    assistant_id: qa
+    interrupt_before: true
+    task: |
+      ## HITL Gate 5 - QA Sign-Off
+      Report: {{report_path}}
+
+      Human verifies test evidence and acceptance-criteria coverage.
+      Continue only after QA sign-off.
+    next:
+      state_id: build-and-deploy
+      clear_prior_messages: true
+      clear_context_store: keep_current
+
+  - id: build-and-deploy
+    assistant_id: devops
+    task: |
+      1. Stop local dev services if needed.
+      2. Run build script: bash build.sh.
+      3. Deploy locally via Docker Compose: docker compose up --build -d.
+      4. Verify backend and frontend availability.
+      5. Capture deployment URLs and health status.
+
+      Output JSON:
+      {
+        "build_success": true,
+        "app_url": "http://localhost:3000",
+        "frontend_url": "http://localhost:5173",
+        "health_status": "ok"
+      }
+    next:
+      state_id: hitl-deploy
+      store_in_context: true
+
+  - id: hitl-deploy
+    assistant_id: devops
+    interrupt_before: true
+    task: |
+      ## HITL Gate 6 - Deployment and Smoke Test
+      Backend: {{app_url}}
+      Frontend: {{frontend_url}}
+
+      Perform smoke checks:
+      - create a task
+      - search for a task
+      - filter by status and priority
+      - validate due-date handling
+
+      Continue only after human deployment validation.
+    next:
+      state_id: documentation-phase
+      clear_prior_messages: true
+      clear_context_store: keep_current
+
+  - id: documentation-phase
+    assistant_id: writer
+    task: |
+      1. Compile implemented stories, design artifacts, API/schema changes, and test evidence into FRD.
+      2. Publish FRD and related architecture/design pages to Confluence.
+      3. Update root README.md with feature summary, setup, API notes, and Jira/Confluence links.
+      4. Commit and push documentation updates.
+      5. Ensure final traceability matrix links Jira, PR, Confluence, test report, and deployment evidence.
+
+      Output JSON:
+      {
+        "frd_url": "https://confluence...",
+        "readme_updated": true,
+        "traceability": {
+          "jira": ["https://jira..."],
+          "pull_request": "{{pr_url}}",
+          "confluence": ["https://confluence..."],
+          "test_report": "{{report_path}}",
+          "deployment": "{{app_url}}"
+        }
+      }
+    next:
+      state_id: hitl-docs
+      store_in_context: true
+
+  - id: hitl-docs
+    assistant_id: writer
+    interrupt_before: true
+    task: |
+      ## HITL Gate 7 - Documentation Sign-Off
+      FRD: {{frd_url}}
+
+      Human confirms documentation reflects implemented behavior and evidence.
+      Continue to complete workflow.
+    next:
+      state_id: end
+
+meta_states:
+  - id: start
+    type: start
+    is_connected: true
+    position:
+      x: 0
+      y: 20
+    measured:
+      width: 256
+      height: 66
+    selected: false
+  - type: assistant
+    is_connected: true
+    position:
+      x: 356
+      y: 20
+    measured:
+      width: 256
+      height: 66
+    id: scan-and-identify-gaps
+    selected: false
+  - type: assistant
+    is_connected: true
+    position:
+      x: 712
+      y: 20
+    measured:
+      width: 256
+      height: 66
+    id: jira-backlog-creation
+    selected: false
+  - type: assistant
+    is_connected: true
+    position:
+      x: 1068
+      y: 20
+    measured:
+      width: 256
+      height: 66
+    id: hitl-requirements
+    selected: false
+  - type: assistant
+    is_connected: true
+    position:
+      x: 1424
+      y: 20
+    measured:
+      width: 256
+      height: 66
+    id: architecture-design
+    selected: false
+  - type: assistant
+    is_connected: true
+    position:
+      x: 1780
+      y: 20
+    measured:
+      width: 256
+      height: 66
+    id: hitl-design
+    selected: false
+  - type: assistant
+    is_connected: true
+    position:
+      x: 2136
+      y: 20
+    measured:
+      width: 256
+      height: 66
+    id: implementation-planning
+    selected: false
+  - type: assistant
+    is_connected: true
+    position:
+      x: 2492
+      y: 20
+    measured:
+      width: 256
+      height: 66
+    id: code-generation
+    selected: false
+  - type: assistant
+    is_connected: true
+    position:
+      x: 2848
+      y: 20
+    measured:
+      width: 256
+      height: 66
+    id: hitl-dev-pr
+    selected: false
+  - type: assistant
+    is_connected: true
+    position:
+      x: 3204
+      y: 20
+    measured:
+      width: 256
+      height: 66
+    id: code-review
+    selected: false
+  - type: assistant
+    is_connected: true
+    position:
+      x: 3560
+      y: 20
+    measured:
+      width: 256
+      height: 66
+    id: hitl-review
+    selected: false
+  - type: assistant
+    is_connected: true
+    position:
+      x: 3916
+      y: 20
+    measured:
+      width: 256
+      height: 66
+    id: merge-pr
+    selected: false
+  - type: assistant
+    is_connected: true
+    position:
+      x: 4272
+      y: 20
+    measured:
+      width: 256
+      height: 66
+    id: qa-testing
+    selected: false
+  - type: assistant
+    is_connected: true
+    position:
+      x: 4628
+      y: 20
+    measured:
+      width: 256
+      height: 66
+    id: hitl-qa
+    selected: false
+  - type: assistant
+    is_connected: true
+    position:
+      x: 4984
+      y: 20
+    measured:
+      width: 256
+      height: 66
+    id: build-and-deploy
+    selected: false
+  - type: assistant
+    is_connected: true
+    position:
+      x: 5340
+      y: 20
+    measured:
+      width: 256
+      height: 66
+    id: hitl-deploy
+    selected: false
+  - type: assistant
+    is_connected: true
+    position:
+      x: 5696
+      y: 20
+    measured:
+      width: 256
+      height: 66
+    id: documentation-phase
+    selected: false
+  - type: assistant
+    is_connected: true
+    position:
+      x: 6052
+      y: 20
+    measured:
+      width: 256
+      height: 66
+    id: hitl-docs
+    selected: false
+  - type: assistant
+    is_connected: true
+    position:
+      x: 4628
+      y: 180
+    measured:
+      width: 256
+      height: 66
+    id: qa-fail-stop
+    selected: false
+  - id: end
+    type: end
+    is_connected: true
+    position:
+      x: 6408
+      y: 20
+    measured:
+      width: 256
+      height: 66
+    selected: false

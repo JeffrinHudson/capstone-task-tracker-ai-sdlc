@@ -1,21 +1,17 @@
 import type { Task, TaskFormData, TaskListQuery } from './types';
 
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
+const API_BASE = import.meta.env.VITE_API_URL ?? '/api';
 
 type ApiErrorResponse = {
-  error?: {
-    code?: string;
-    message?: string;
-    fields?: Record<string, string>;
-  };
+  error?: string;
 };
 
 async function handleResponse<T>(res: Response): Promise<T> {
-  const body = (await res.json().catch(() => ({ error: { message: res.statusText } }))) as unknown;
+  const body = (await res.json().catch(() => ({ error: res.statusText }))) as unknown;
 
   if (!res.ok) {
     const parsed = body as ApiErrorResponse;
-    const msg = parsed?.error?.message ?? 'Request failed';
+    const msg = parsed?.error ?? 'Request failed';
     const err = new Error(msg);
     (err as unknown as { payload?: unknown }).payload = body;
     throw err;
@@ -39,19 +35,19 @@ function toQueryString(query?: TaskListQuery): string {
 }
 
 export async function fetchTasks(query?: TaskListQuery): Promise<Task[]> {
-  const res = await fetch(`${API_BASE}/api/tasks${toQueryString(query)}`);
+  const res = await fetch(`${API_BASE}/tasks${toQueryString(query)}`);
   const data = await handleResponse<{ items: Task[] }>(res);
   return data.items;
 }
 
 export async function fetchTask(id: string): Promise<Task> {
-  const res = await fetch(`${API_BASE}/api/tasks/${id}`);
+  const res = await fetch(`${API_BASE}/tasks/${id}`);
   const data = await handleResponse<{ item: Task }>(res);
   return data.item;
 }
 
 export async function createTask(data: TaskFormData): Promise<Task> {
-  const res = await fetch(`${API_BASE}/api/tasks`, {
+  const res = await fetch(`${API_BASE}/tasks`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -67,7 +63,7 @@ export async function createTask(data: TaskFormData): Promise<Task> {
 }
 
 export async function updateTask(id: string, data: TaskFormData): Promise<Task> {
-  const res = await fetch(`${API_BASE}/api/tasks/${id}`, {
+  const res = await fetch(`${API_BASE}/tasks/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -82,7 +78,7 @@ export async function updateTask(id: string, data: TaskFormData): Promise<Task> 
 }
 
 export async function updateTaskStatus(id: string, status: Task['status']): Promise<Task> {
-  const res = await fetch(`${API_BASE}/api/tasks/${id}/status`, {
+  const res = await fetch(`${API_BASE}/tasks/${id}/status`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status }),
@@ -92,7 +88,7 @@ export async function updateTaskStatus(id: string, status: Task['status']): Prom
 }
 
 export async function updateTaskPriority(id: string, priority: Task['priority']): Promise<Task> {
-  const res = await fetch(`${API_BASE}/api/tasks/${id}/priority`, {
+  const res = await fetch(`${API_BASE}/tasks/${id}/priority`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ priority }),
