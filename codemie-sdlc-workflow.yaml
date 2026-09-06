@@ -258,16 +258,38 @@ states:
     task: |
       1. Squash-merge PR #{{pr_number}} into main after human approval.
       2. Confirm merge commit and resulting main branch status.
+      3. Reliability mode:
+         - If API merge fails due to token/permission limits, return merged=false with a clear blocker and next_action for manual merge.
 
       Output JSON:
       {
         "merged": true,
-        "merge_method": "squash",
-        "merge_commit": "<sha>"
+        "merge_method": "squash|manual",
+        "merge_commit": "<sha>",
+        "blocker": "",
+        "next_action": ""
       }
     next:
+      condition:
+        expression: merged == true
+        then: qa-testing
+        otherwise: hitl-manual-merge
+
+  - id: hitl-manual-merge
+    assistant_id: reviewer
+    interrupt_before: true
+    task: |
+      ## Manual Merge Required
+      Automatic merge failed.
+      Blocker: {{blocker}}
+      Next Action: {{next_action}}
+
+      Human merges PR #{{pr_number}} in GitHub UI and confirms merge commit.
+      Continue only after manual merge evidence is provided.
+    next:
       state_id: qa-testing
-      store_in_context: true
+      clear_prior_messages: true
+      clear_context_store: keep_current
 
   - id: qa-testing
     assistant_id: qa
@@ -281,8 +303,12 @@ states:
       Output JSON:
       {
         "test_files": ["e2e/tests/enhancements.spec.ts"],
-        "passed_count": 12,
+        "executed_command": "npm run test:e2e",
+        "raw_summary": "10 passed, 1 skipped",
+        "passed_count": 10,
         "failed_count": 0,
+        "skipped_count": 1,
+        "failed_tests": [],
         "report_path": "e2e/test-results/html-report/index.html"
       }
     next:
@@ -324,7 +350,9 @@ states:
     assistant_id: devops
     task: |
       1. Stop local dev services if needed.
-      2. Run build script: bash build.sh.
+      2. Run build in cross-platform mode:
+         - Preferred: bash build.sh
+         - Fallback (Windows/no bash): npm ci && npm run build --workspace=backend && npm run build --workspace=frontend
       3. Deploy locally via Docker Compose: docker compose up --build -d.
       4. Verify backend and frontend availability.
       5. Capture deployment URLs and health status.
@@ -332,6 +360,7 @@ states:
       Output JSON:
       {
         "build_success": true,
+        "build_command_used": "bash build.sh | npm ci && npm run build --workspace=backend && npm run build --workspace=frontend",
         "app_url": "http://localhost:3000",
         "frontend_url": "http://localhost:5173",
         "health_status": "ok"
@@ -368,11 +397,20 @@ states:
       3. Update root README.md with feature summary, setup, API notes, and Jira/Confluence links.
       4. Commit and push documentation updates.
       5. Ensure final traceability matrix links Jira, PR, Confluence, test report, and deployment evidence.
+      6. Reliability mode:
+         - If some links cannot be resolved, return docs_publish_status=partial_with_placeholders and list missing fields.
+         - If Confluence publishing fails, return docs_publish_status=fallback_ready with markdown content for manual publish.
 
       Output JSON:
       {
+        "docs_publish_status": "published|partial_with_placeholders|fallback_ready|failed",
         "frd_url": "https://confluence...",
         "readme_updated": true,
+        "missing_fields": [],
+        "fallback_markdown": {
+          "frd_title": "Feature Requirements Document",
+          "frd_body": "..."
+        },
         "traceability": {
           "jira": ["https://jira..."],
           "pull_request": "{{pr_url}}",
@@ -391,6 +429,15 @@ states:
     task: |
       ## HITL Gate 7 - Documentation Sign-Off
       FRD: {{frd_url}}
+
+      If docs_publish_status=published:
+      - Approve final documentation set.
+
+      If docs_publish_status=partial_with_placeholders:
+      - Confirm placeholder fields and approve follow-up ownership.
+
+      If docs_publish_status=fallback_ready:
+      - Review fallback_markdown and approve manual publish plan.
 
       Human confirms documentation reflects implemented behavior and evidence.
       Continue to complete workflow.
